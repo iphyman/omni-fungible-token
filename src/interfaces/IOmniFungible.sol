@@ -2,21 +2,9 @@
 
 pragma solidity ^0.8.19;
 
-import {IReceiveTransferCallback} from "./IReceiveTransferCallback.sol";
 import {IAdapterCallParamStructure} from "../structures/IAdapterCallParamStructure.sol";
 
-interface IOmniFungible is
-    IAdapterCallParamStructure,
-    IReceiveTransferCallback
-{
-    /**
-     * @dev A list of perfomable actions
-     */
-    enum Action {
-        TRANSFER,
-        TRANSFER_WITH_CALLBACK
-    }
-
+interface IOmniFungible is IAdapterCallParamStructure {
     /**
      * @dev Emitted when a remote transfer is initiated from the source chain
      *
