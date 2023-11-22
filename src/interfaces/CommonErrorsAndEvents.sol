@@ -6,6 +6,9 @@ interface CommonErrorsAndEvents {
     ///@notice Emitted when a new router contract is registered
     event RouterRegistered(uint16 chainId, bytes32 routerAddress);
 
+    /// @notice Emitted whenever a transfer with callback is initiated to non-contract account
+    event NotContractAccount(address to);
+
     /// @notice Revert when insufficient fund is provided for interchain messaging
     error InsufficientFee();
 
@@ -17,4 +20,13 @@ interface CommonErrorsAndEvents {
 
     /// @notice Revert if GMPP is already enabled
     error GMPPEnabledAlready();
+
+    /// @notice Revert when the shared decimals is greater than the token decimals
+    error InvalidDecimal();
+
+    /// @notice Revert when trying to make an unathorized call
+    error NotOminiFungible();
+
+    /// @notice Revert when calling an unsupported action
+    error UnsupportedAction();
 }

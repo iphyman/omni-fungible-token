@@ -11,11 +11,11 @@ import {BytesLib} from "../libraries/BytesLib.sol";
 import {ExcessivelySafeCall} from "../libraries/ExcessivelySafeCall.sol";
 import {CommonErrorsAndEvents} from "../interfaces/CommonErrorsAndEvents.sol";
 
-// import {Ownable} from "@openzeppelin/";
+import {Ownable} from "lib/openzeppelin-contracts";
 import {LzAdapterState} from "./LzAdapterState.sol";
 
 abstract contract LayerZeroAdapter is
-    Authorization,
+    Ownable,
     LzAdapterState,
     ILayerZeroReceiver,
     CommonErrorsAndEvents,
@@ -115,6 +115,7 @@ abstract contract LayerZeroAdapter is
             revert GMPPEnabledAlready();
 
         layerZeroEndpoint = ILayerZeroEndpoint(_lzEndpoint);
+        _lzState.chainId = layerZeroEndpoint.getChainId();
     }
 
     function nonblockingLzReceive(
