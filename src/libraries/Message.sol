@@ -2,10 +2,21 @@
 
 pragma solidity ^0.8.19;
 
-import {BytesLib} from "./BytesLib.sol";
+import { BytesLib } from "./BytesLib.sol";
 
 library Message {
     using BytesLib for bytes;
+
+    /**
+     * @notice A list of possible interchain communication channels
+     */
+    enum Channel {
+        AXELAR,
+        CHAINLINK_CCIP,
+        HYPERLANE,
+        LAYERZERO,
+        WORMHOLE
+    }
 
     uint8 public constant TRANSFER = 1;
     uint8 public constant TRANSFER_WITH_CALLBACK = 2;
@@ -17,16 +28,18 @@ library Message {
         return payload.toUint8(0);
     }
 
-    function remote(
-        bytes memory payload
-    ) internal pure returns (bytes32 remoteAddress) {
+    function remote(bytes memory payload) internal pure returns (bytes32 remoteAddress) {
         remoteAddress = payload.toBytes32(0);
     }
 
     function encodeTransfer(
         bytes32 _to,
         uint64 _amount
-    ) internal pure returns (bytes memory payload) {
+    )
+        internal
+        pure
+        returns (bytes memory payload)
+    {
         payload = abi.encodePacked(TRANSFER, _to, _amount);
     }
 
@@ -36,20 +49,21 @@ library Message {
         uint64 _amount,
         uint64 _gasForCallback,
         bytes memory _payload
-    ) internal pure returns (bytes memory payload) {
+    )
+        internal
+        pure
+        returns (bytes memory payload)
+    {
         payload = abi.encodePacked(
-            TRANSFER_WITH_CALLBACK,
-            _from,
-            _to,
-            _amount,
-            _gasForCallback,
-            _payload
+            TRANSFER_WITH_CALLBACK, _from, _to, _amount, _gasForCallback, _payload
         );
     }
 
-    function decodeTransfer(
-        bytes memory payload
-    ) internal pure returns (bytes32 to, uint256 amount) {
+    function decodeTransfer(bytes memory payload)
+        internal
+        pure
+        returns (bytes32 to, uint256 amount)
+    {
         uint8 action = payload.toUint8(0);
 
         if (action != TRANSFER) revert InvalidPayload();
@@ -58,9 +72,7 @@ library Message {
         amount = payload.toUint64(33);
     }
 
-    function decodeTransferWithCallback(
-        bytes memory _payload
-    )
+    function decodeTransferWithCallback(bytes memory _payload)
         internal
         pure
         returns (

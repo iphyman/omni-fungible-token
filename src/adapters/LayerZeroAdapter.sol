@@ -2,16 +2,18 @@
 
 pragma solidity ^0.8.19;
 
-import {ILayerZeroEndpoint} from "../interfaces/ILayerZeroEndpoint.sol";
-import {ILayerZeroReceiver} from "../interfaces/ILayerZeroReceiver.sol";
-import {ILayerZeroUserApplicationConfig} from "../interfaces/ILayerZeroUserApplicationConfig.sol";
-import {LayerZeroAdapterErrorsAndEvents} from "../interfaces/LayerZeroAdapterErrorsAndEvents.sol";
+import { ILayerZeroEndpoint } from "../interfaces/ILayerZeroEndpoint.sol";
+import { ILayerZeroReceiver } from "../interfaces/ILayerZeroReceiver.sol";
+import { ILayerZeroUserApplicationConfig } from
+    "../interfaces/ILayerZeroUserApplicationConfig.sol";
+import { LayerZeroAdapterErrorsAndEvents } from
+    "../interfaces/LayerZeroAdapterErrorsAndEvents.sol";
 
-import {BytesLib} from "../libraries/BytesLib.sol";
-import {ExcessivelySafeCall} from "../libraries/ExcessivelySafeCall.sol";
-import {CommonErrorsAndEvents} from "../interfaces/CommonErrorsAndEvents.sol";
+import { BytesLib } from "../libraries/BytesLib.sol";
+import { ExcessivelySafeCall } from "../libraries/ExcessivelySafeCall.sol";
+import { CommonErrorsAndEvents } from "../interfaces/CommonErrorsAndEvents.sol";
 
-import {Ownable} from "lib/openzeppelin-contracts";
+import { Ownable } from "lib/openzeppelin-contracts";
 
 abstract contract LayerZeroAdapter is
     Ownable,
@@ -42,7 +44,10 @@ abstract contract LayerZeroAdapter is
         bytes calldata _srcAddress,
         uint64 _nonce,
         bytes calldata _payload
-    ) external override {
+    )
+        external
+        override
+    {
         // Ensures the endpoint caller is layerZero
         _ensureEndpointCaller(address(layerZeroEndpoint));
         // Ensures the message originates from a whitelisted spoke contract
@@ -55,9 +60,12 @@ abstract contract LayerZeroAdapter is
     function setConfig(
         uint16 _version,
         uint16 _chainId,
-        uint _configType,
+        uint256 _configType,
         bytes calldata _config
-    ) external override {
+    )
+        external
+        override
+    {
         layerZeroEndpoint.setConfig(_version, _chainId, _configType, _config);
     }
 
@@ -75,7 +83,11 @@ abstract contract LayerZeroAdapter is
     function forceResumeReceive(
         uint16 _srcChainId,
         bytes calldata _srcAddress
-    ) external override onlyOwner {
+    )
+        external
+        override
+        onlyOwner
+    {
         layerZeroEndpoint.forceResumeReceive(_srcChainId, _srcAddress);
     }
 
@@ -89,9 +101,13 @@ abstract contract LayerZeroAdapter is
         uint16 _srcChainId,
         bytes32 _srcAdd,
         bytes memory _srcAddress
-    ) external onlyOwner {
-        if (lzState.routers[_srcChainId].length != 0)
+    )
+        external
+        onlyOwner
+    {
+        if (lzState.routers[_srcChainId].length != 0) {
             revert RouterAlreadyExists();
+        }
 
         lzState.routers[_srcChainId] = _srcAddress;
 
@@ -106,7 +122,10 @@ abstract contract LayerZeroAdapter is
         uint16 _dstChainId,
         uint8 _functionType,
         uint256 _gas
-    ) external onlyOwner {
+    )
+        external
+        onlyOwner
+    {
         lzState.gasLookup[_dstChainId][_functionType] = _gas;
         emit LzGasEstimate(_dstChainId, _functionType, _gas);
     }
@@ -120,7 +139,9 @@ abstract contract LayerZeroAdapter is
         bytes calldata _srcAddress,
         uint64 _nonce,
         bytes calldata _payload
-    ) public {
+    )
+        public
+    {
         _ensureEndpointCaller(address(this));
         _nonblockingLzReceive(_srcChainId, _srcAddress, _nonce, _payload);
     }
@@ -130,10 +151,11 @@ abstract contract LayerZeroAdapter is
         bytes calldata _srcAddress,
         uint64 _nonce,
         bytes calldata _payload
-    ) public payable {
-        bytes32 payloadHash = lzState.failedMessages[_srcChainId][_srcAddress][
-            _nonce
-        ];
+    )
+        public
+        payable
+    {
+        bytes32 payloadHash = lzState.failedMessages[_srcChainId][_srcAddress][_nonce];
 
         if (payloadHash == bytes32(0)) revert NoStoredFailedMessage();
         if (keccak256(_payload) != payloadHash) revert InvalidLzPayload();
@@ -147,17 +169,20 @@ abstract contract LayerZeroAdapter is
      * @notice Validates if a source is whitelisted
      * @param _srcChainId LayerZero chainId of the source chain
      * @param _srcAddress UA router contract address
-     **/
+     *
+     */
     function _ensureTrustedLzRouter(
         uint16 _srcChainId,
         bytes memory _srcAddress
-    ) internal view {
+    )
+        internal
+        view
+    {
         bytes memory router = lzState.routers[_srcChainId];
 
         if (
-            router.length == 0 ||
-            _srcAddress.length != router.length ||
-            keccak256(_srcAddress) != keccak256(router)
+            router.length == 0 || _srcAddress.length != router.length
+                || keccak256(_srcAddress) != keccak256(router)
         ) {
             revert MisTrustedRouter();
         }
@@ -181,7 +206,9 @@ abstract contract LayerZeroAdapter is
         bytes memory _srcAddress,
         uint64 _nonce,
         bytes memory _payload
-    ) internal {
+    )
+        internal
+    {
         (bool success, bytes memory reason) = address(this).excessivelySafeCall(
             gasleft(),
             150,
@@ -195,13 +222,7 @@ abstract contract LayerZeroAdapter is
         );
 
         if (!success) {
-            _storeFailedMessage(
-                _srcChainId,
-                _srcAddress,
-                _nonce,
-                _payload,
-                reason
-            );
+            _storeFailedMessage(_srcChainId, _srcAddress, _nonce, _payload, reason);
         }
     }
 
@@ -211,18 +232,12 @@ abstract contract LayerZeroAdapter is
         uint64 _nonce,
         bytes memory _payload,
         bytes memory _reason
-    ) internal {
-        lzState.failedMessages[_srcChainId][_srcAddress][_nonce] = keccak256(
-            _payload
-        );
+    )
+        internal
+    {
+        lzState.failedMessages[_srcChainId][_srcAddress][_nonce] = keccak256(_payload);
 
-        emit LzMessageFailed(
-            _srcChainId,
-            _srcAddress,
-            _nonce,
-            _payload,
-            _reason
-        );
+        emit LzMessageFailed(_srcChainId, _srcAddress, _nonce, _payload, _reason);
     }
 
     function _lzSend(
@@ -232,9 +247,12 @@ abstract contract LayerZeroAdapter is
         address payable _refundAddress,
         address _zroPaymentAddress,
         bytes memory _adapterParams,
-        uint _nativeFee
-    ) internal virtual {
-        layerZeroEndpoint.send{value: _nativeFee}(
+        uint256 _nativeFee
+    )
+        internal
+        virtual
+    {
+        layerZeroEndpoint.send{ value: _nativeFee }(
             _dstChainId,
             _dstRemote,
             _payload,
@@ -245,9 +263,11 @@ abstract contract LayerZeroAdapter is
     }
 
     /// @notice Returns params for V1
-    function _lzAdapterParam(
-        uint256 _gasLimit
-    ) internal pure returns (bytes memory params) {
+    function _lzAdapterParam(uint256 _gasLimit)
+        internal
+        pure
+        returns (bytes memory params)
+    {
         params = abi.encodePacked(uint16(1), _gasLimit);
     }
 
@@ -256,7 +276,11 @@ abstract contract LayerZeroAdapter is
         uint256 _gasLimit,
         address _to,
         uint256 _amount
-    ) internal pure returns (bytes memory params) {
+    )
+        internal
+        pure
+        returns (bytes memory params)
+    {
         params = abi.encodePacked(uint16(2), _gasLimit, _amount, _to);
     }
 
@@ -265,5 +289,7 @@ abstract contract LayerZeroAdapter is
         bytes memory _srcAddress,
         uint64 _nonce,
         bytes memory _payload
-    ) internal virtual;
+    )
+        internal
+        virtual;
 }

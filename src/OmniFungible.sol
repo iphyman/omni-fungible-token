@@ -2,27 +2,31 @@
 
 pragma solidity ^0.8.19;
 
-import {IOmniFungible} from "./interfaces/IOmniFungible.sol";
-import {IReceiveTransferCallback} from "./interfaces/IReceiveTransferCallback.sol";
+import { IOmniFungible } from "./interfaces/IOmniFungible.sol";
+import { IReceiveTransferCallback } from "./interfaces/IReceiveTransferCallback.sol";
 
-import {AddressTypeCast} from "./libraries/AddressTypeCast.sol";
-import {Message} from "./libraries/Message.sol";
-import {Ownable} from "lib/openzeppelin-contracts";
-import {ERC20} from "lib/openzeppelin-contracts";
+import { AddressTypeCast } from "./libraries/AddressTypeCast.sol";
+import { Message } from "./libraries/Message.sol";
+import { Ownable } from "lib/openzeppelin-contracts";
+import { ERC20 } from "lib/openzeppelin-contracts";
 
-import {LayerZeroAdapter} from "./layerzero/LayerZeroAdapter.sol";
+import { LayerZeroAdapter } from "./adapters/LayerZeroAdapter.sol";
 
 contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
     using Message for bytes;
     using AddressTypeCast for bytes32;
     using AddressTypeCast for address;
 
+    uint256 constant DEFAULT_GAS_LIMIT = 500_000;
+
     constructor(
         address _owner,
-        address _lzEndpoint,
         string memory _name,
         string memory _symbol
-    ) Ownable(_owner) LayerZeroAdapter(_lzEndPoint) ERC20(_name, _symbol) {}
+    )
+        Ownable(_owner)
+        ERC20(_name, _symbol)
+    { }
 
     /// @inheritdoc IOmniFungible
     function transferFrom(
@@ -31,7 +35,11 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
         bytes32 to,
         uint256 value,
         AdapterCallParams calldata params
-    ) external payable override {
+    )
+        external
+        payable
+        override
+    {
         _remoteTransfer(dstChainId, from, to, value, params);
     }
 
@@ -44,36 +52,24 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
         uint64 gasForCallback,
         bytes calldata payload,
         AdapterCallParams calldata params
-    ) external payable override {
+    )
+        external
+        payable
+        override
+    {
         _remoteTransferWithCallback(
-            dstChainId,
-            from,
-            to,
-            value,
-            gasForCallback,
-            payload,
-            params
+            dstChainId, from, to, value, gasForCallback, payload, params
         );
     }
 
     /// @inheritdoc IOmniFungible
     function circulatingSupply() external view override returns (uint256) {
-        return 400;
+        return totalSupply();
     }
 
-    function _decimals(address token) internal view returns (uint8) {
-        (, bytes memory queriedDecimals) = token.staticcall(
-            abi.encodeWithSignature("decimals()")
-        );
-
-        return abi.decode(queriedDecimals, (uint8));
-    }
-
-    function _normalizeAmount(
-        uint256 _amount,
-        uint8 _decimals
-    ) internal pure returns (uint64 amount) {
+    function _normalizeAmount(uint256 _amount) internal pure returns (uint64 amount) {
         amount = uint64(_amount);
+        uint8 _decimals = decimals();
 
         if (_decimals > 8) {
             amount /= 10 ** (_decimals - 8);
@@ -82,11 +78,9 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
         return amount;
     }
 
-    function _deNormalizeAmount(
-        uint64 _amount,
-        uint8 _decimals
-    ) internal returns (uint256 amount) {
+    function _deNormalizeAmount(uint64 _amount) internal returns (uint256 amount) {
         amount = uint256(_amount);
+        uint8 _decimals = decimals();
 
         if (_decimals > 8) {
             amount *= 10 ** (_decimals - 8);
@@ -95,15 +89,12 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
         return amount;
     }
 
-    function _transferFrom(
-        address _from,
-        address _to,
-        uint256 _amount
-    ) internal {
+    function _transferFrom(address _from, address _to, uint256 _amount) internal {
         address spender = _msgSender();
 
-        if (_from != address(this) && _from != spender)
+        if (_from != address(this) && _from != spender) {
             _spendAllowance(_from, spender, _amount);
+        }
 
         _transfer(_from, _to, _amount);
     }
@@ -111,24 +102,25 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
     function tryCallback(
         uint16 srcChainId,
         bytes calldata srcAddress,
-        uint64 /**nonce*/,
+        uint64,
+        /**
+         * nonce
+         */
         bytes32 from,
         address to,
         uint256 amount,
         uint256 gasForCall,
         bytes calldata payload
-    ) public {
+    )
+        public
+    {
         if (_msgSender() != address(this)) revert NotOmniFungible();
 
         _transferFrom(address(this), to, amount);
         emit RemoteTransferReceived(srcChainId, to, amount);
 
-        IReceiveTransferCallback(to).onReceiveTransfer{gas: gasForCall}(
-            srcChainId,
-            srcAddress,
-            from,
-            amount,
-            payload
+        IReceiveTransferCallback(to).onReceiveTransfer{ gas: gasForCall }(
+            srcChainId, srcAddress, from, amount, payload
         );
     }
 
@@ -138,29 +130,33 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
         bytes32 to,
         uint256 value,
         AdapterCallParams calldata params
-    ) internal {
-        uint64 normalizedAmount = _normalizeAmount(
-            value,
-            _decimals(address(this))
-        );
+    )
+        internal
+    {
+        uint64 normalizedAmount = _normalizeAmount(value);
         bytes memory payload = Message.encodeTransfer(to, normalizedAmount);
 
         address spender = _msgSender();
-        bytes memory remoteRouter = _lzState.routers[dstChainId];
-        // bytes32 remote = remoteRouter.remote();
+        Message.Channel channel = Message.Channel(params.adapter);
 
         if (from != spender) _spendAllowance(from, spender, value);
 
         _burn(_from, value);
-        _lzSend(
-            dstChainId,
-            remoteRouter,
-            payload,
-            params.refundAddress,
-            params.zroPaymentAddress,
-            params.lzAdapterParams,
-            msg.value
-        );
+
+        if (channel == Message.Channel.LAYERZERO) {
+            bytes memory remoteRouter = lzState.routers[dstChainId];
+            bytes memory adapterParams = _lzAdapterParam(DEFAULT_GAS_LIMIT);
+            //TODO: ensure remoteRouter is valid
+            _lzSend(
+                dstChainId,
+                remoteRouter,
+                payload,
+                params.refundAddress,
+                address(0),
+                adapterParams,
+                msg.value
+            );
+        }
 
         emit RemoteTransfer(dstChainId, to, from, value);
     }
@@ -171,101 +167,89 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
         bytes32 to,
         uint256 value,
         uint64 gasForCallback,
-        bytes calldata message,
+        bytes calldata payload,
         AdapterCallParams calldata params
-    ) internal {
-        uint64 normalizedAmount = _normalizeAmount(
-            value,
-            _decimals(address(this))
-        );
-        bytes memory payload = Message.encodeTransferWithCallback(
-            from,
-            to,
-            normalizedAmount,
-            gasForCallback,
-            message
+    )
+        internal
+    {
+        uint64 normalizedAmount = _normalizeAmount(value);
+        bytes memory _payload = Message.encodeTransferWithCallback(
+            from, to, normalizedAmount, gasForCallback, payload
         );
 
         address spender = _msgSender();
-        bytes memory remoteRouter = _lzState.routers[dstChainId];
+        Message.Channel channel = Message.Channel(params.adapter);
 
         if (from != spender) _spendAllowance(from, spender, value);
 
         _burn(_from, value);
-        _lzSend(
-            dstChainId,
-            remoteRouter,
-            payload,
-            params.refundAddress,
-            params.zroPaymentAddress,
-            params.lzAdapterParams,
-            msg.value
-        );
+
+        if (channel == Message.Channel.LAYERZERO) {
+            bytes memory remoteRouter = lzState.routers[dstChainId];
+            bytes memory adapterParams = _lzAdapterParam(
+                DEFAULT_GAS_LIMIT, AddressTypeCast.bytes32ToAddress(to), gasForCallback
+            );
+            /// TODO: ensure valid remoteRouter
+            _lzSend(
+                dstChainId,
+                remoteRouter,
+                _payload,
+                params.refundAddress,
+                address(0),
+                adapterParams,
+                msg.value
+            );
+        }
 
         emit RemoteTransfer(dstChainId, to, from, value);
     }
 
-    function _receiveTransfer(
-        uint16 srcChainId,
-        bytes memory payload
-    ) internal {
-        (bytes32 _to, uint64 _amount) = payload.decodeTransfer();
+    function _receiveTransfer(uint16 _srcChainId, bytes memory _payload) internal {
+        (bytes32 _to, uint64 _amount) = _payload.decodeTransfer();
         address to = _to.bytes32ToAddress();
-        uint256 amount = _deNormalizeAmount(_amount, _decimals(address(this)));
+        uint256 amount = _deNormalizeAmount(_amount);
 
         _mint(to, amount);
 
-        emit RemoteTransferReceived(srcChainId, to, amount);
+        emit RemoteTransferReceived(_srcChainId, to, amount);
     }
 
     function _receiveTransferWithCallback(
-        uint16 srcChainId,
-        bytes memory srcAddress,
-        uint64 nonce,
-        bytes memory _payload
-    ) internal {
+        uint16 _srcChainId,
+        bytes memory _srcAddress,
+        uint64 _nonce,
+        bytes memory _payload,
+        Message.Channel _channel
+    )
+        internal
+    {
         (
-            bytes32 from,
+            bytes32 _from,
             bytes32 to,
             uint64 amount,
             uint64 gasForCallback,
             bytes memory payload
         ) = _payload.decodeTransferWithCallback();
-        bool minted = _lzState.minted[srcChainId][srcAddress][nonce];
-        uint256 denormalizedAmount = _deNormalizeAmount(
-            amount,
-            _decimals(address(this))
-        );
 
-        if (!minted) {
-            _mint(address(this), denormalizedAmount);
-            _lzState.minted[srcChainId][srcAddress][nonce] = true;
-        }
+        uint256 denormalizedAmount = _deNormalizeAmount(amount);
+        address _to = AddressTypeCast.bytes32ToAddress(to);
 
-        if (!_isContract(to)) {
-            emit NotContractAccount(to);
+        if (!_isContract(_to)) {
+            emit NotContractAccount(_to);
             return;
         }
 
-        uint256 gas = minted ? gasleft() : gasForCallback;
-        (bool success, bytes memory reason) = address(this).excessivelySafeCall(
-            gasleft(),
-            150,
-            abi.encodeWithSelector(
-                this.tryCallback.selector,
-                srcChainId,
-                srcAddress,
-                nonce,
-                from,
-                to,
-                amount,
-                gas,
+        if (_channel == Message.Channel.LAYERZERO) {
+            _receiveLzTransferWithCallback(
+                _srcChainId,
+                _srcAddress,
+                _nonce,
+                _from,
+                _to,
+                denormalizedAmount,
+                gasForCallback,
                 payload
-            )
-        );
-
-        if (!success) {
-            _storeFailedMessage(srcChainId, srcAddress, nonce, payload, reason);
+            );
         }
     }
 
@@ -274,24 +258,64 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
     }
 
     function _nonblockingLzReceive(
-        uint16 srcChainId,
-        bytes memory srcAddress,
-        uint64 nonce,
-        bytes memory payload
-    ) internal override {
-        uint8 action = payload.payloadId();
+        uint16 _srcChainId,
+        bytes memory _srcAddress,
+        uint64 _nonce,
+        bytes memory _payload
+    )
+        internal
+        override
+    {
+        uint8 action = _payload.payloadId();
 
         if (action == Message.TRANSFER) {
-            _receiveTransfer(srcChainId, payload);
+            _receiveTransfer(_srcChainId, _payload);
         } else if (action == Message.TRANSFER_WITH_CALLBACK) {
             _receiveTransferWithCallback(
-                srcChainId,
-                srcAddress,
-                nonce,
-                payload
+                _srcChainId, _srcAddress, _nonce, _payload, Message.Channel.LAYERZERO
             );
         } else {
             revert UnSupportedAction();
+        }
+    }
+
+    function _receiveLzTransferWithCallback(
+        uint16 _srcChainId,
+        bytes memory _srcAddress,
+        uint64 _nonce,
+        bytes32 _from,
+        address _to,
+        uint256 _amount,
+        uint64 _gasForCallback,
+        bytes memory _payload
+    )
+        internal
+    {
+        bool minted = lzState.minted[_srcChainId][_srcAddress][_nonce];
+        if (!minted) {
+            _mint(address(this), _amount);
+            lzState.minted[_srcChainId][_srcAddress][_nonce] = true;
+        }
+
+        uint256 gas = minted ? gasleft() : gasForCallback;
+        (bool success, bytes memory reason) = address(this).excessivelySafeCall(
+            gasleft(),
+            150,
+            abi.encodeWithSelector(
+                this.tryCallback.selector,
+                _srcChainId,
+                _srcAddress,
+                _nonce,
+                _from,
+                _to,
+                _amount,
+                gas,
+                _payload
+            )
+        );
+
+        if (!success) {
+            _storeFailedMessage(_srcChainId, _srcAddress, _nonce, _payload, reason);
         }
     }
 }
