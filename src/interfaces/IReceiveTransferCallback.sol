@@ -24,5 +24,6 @@ interface IReceiveTransferCallback {
         bytes32 from,
         uint256 amount,
         bytes calldata payload
-    ) external;
+    )
+        external;
 }

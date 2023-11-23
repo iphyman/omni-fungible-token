@@ -15,5 +15,6 @@ interface ILayerZeroReceiver {
         bytes calldata _srcAddress,
         uint64 _nonce,
         bytes calldata _payload
-    ) external;
+    )
+        external;
 }

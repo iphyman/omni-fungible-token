@@ -1,13 +1,11 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 pragma solidity ^0.8.19;
 
 import { ILayerZeroEndpoint } from "../interfaces/ILayerZeroEndpoint.sol";
 import { ILayerZeroReceiver } from "../interfaces/ILayerZeroReceiver.sol";
-import { ILayerZeroUserApplicationConfig } from
-    "../interfaces/ILayerZeroUserApplicationConfig.sol";
-import { LayerZeroAdapterErrorsAndEvents } from
-    "../interfaces/LayerZeroAdapterErrorsAndEvents.sol";
+import { ILayerZeroUserApplicationConfig } from "../interfaces/ILayerZeroUserApplicationConfig.sol";
+import { LayerZeroAdapterErrorsAndEvents } from "../interfaces/LayerZeroAdapterErrorsAndEvents.sol";
 
 import { BytesLib } from "../libraries/BytesLib.sol";
 import { ExcessivelySafeCall } from "../libraries/ExcessivelySafeCall.sol";
@@ -80,14 +78,7 @@ abstract contract LayerZeroAdapter is
     }
 
     ///@inheritdoc ILayerZeroUserApplicationConfig
-    function forceResumeReceive(
-        uint16 _srcChainId,
-        bytes calldata _srcAddress
-    )
-        external
-        override
-        onlyOwner
-    {
+    function forceResumeReceive(uint16 _srcChainId, bytes calldata _srcAddress) external override onlyOwner {
         layerZeroEndpoint.forceResumeReceive(_srcChainId, _srcAddress);
     }
 
@@ -97,14 +88,7 @@ abstract contract LayerZeroAdapter is
      * @param _srcAdd bytes32 representation of the router address
      * @param _srcAddress contract address of router
      */
-    function registerLzRouter(
-        uint16 _srcChainId,
-        bytes32 _srcAdd,
-        bytes memory _srcAddress
-    )
-        external
-        onlyOwner
-    {
+    function registerLzRouter(uint16 _srcChainId, bytes32 _srcAdd, bytes memory _srcAddress) external onlyOwner {
         if (lzState.routers[_srcChainId].length != 0) {
             revert RouterAlreadyExists();
         }
@@ -118,14 +102,7 @@ abstract contract LayerZeroAdapter is
     /// @param _dstChainId layerZero destination chainId
     /// @param _functionType synthmos function type
     /// @param _gas required gas to execute function at destination chain
-    function setLzDestGas(
-        uint16 _dstChainId,
-        uint8 _functionType,
-        uint256 _gas
-    )
-        external
-        onlyOwner
-    {
+    function setLzDestGas(uint16 _dstChainId, uint8 _functionType, uint256 _gas) external onlyOwner {
         lzState.gasLookup[_dstChainId][_functionType] = _gas;
         emit LzGasEstimate(_dstChainId, _functionType, _gas);
     }
@@ -171,19 +148,10 @@ abstract contract LayerZeroAdapter is
      * @param _srcAddress UA router contract address
      *
      */
-    function _ensureTrustedLzRouter(
-        uint16 _srcChainId,
-        bytes memory _srcAddress
-    )
-        internal
-        view
-    {
+    function _ensureTrustedLzRouter(uint16 _srcChainId, bytes memory _srcAddress) internal view {
         bytes memory router = lzState.routers[_srcChainId];
 
-        if (
-            router.length == 0 || _srcAddress.length != router.length
-                || keccak256(_srcAddress) != keccak256(router)
-        ) {
+        if (router.length == 0 || _srcAddress.length != router.length || keccak256(_srcAddress) != keccak256(router)) {
             revert MisTrustedRouter();
         }
     }
@@ -212,13 +180,7 @@ abstract contract LayerZeroAdapter is
         (bool success, bytes memory reason) = address(this).excessivelySafeCall(
             gasleft(),
             150,
-            abi.encodeWithSelector(
-                this.nonblockingLzReceive.selector,
-                _srcChainId,
-                _srcAddress,
-                _nonce,
-                _payload
-            )
+            abi.encodeWithSelector(this.nonblockingLzReceive.selector, _srcChainId, _srcAddress, _nonce, _payload)
         );
 
         if (!success) {
@@ -253,21 +215,12 @@ abstract contract LayerZeroAdapter is
         virtual
     {
         layerZeroEndpoint.send{ value: _nativeFee }(
-            _dstChainId,
-            _dstRemote,
-            _payload,
-            _refundAddress,
-            _zroPaymentAddress,
-            _adapterParams
+            _dstChainId, _dstRemote, _payload, _refundAddress, _zroPaymentAddress, _adapterParams
         );
     }
 
     /// @notice Returns params for V1
-    function _lzAdapterParam(uint256 _gasLimit)
-        internal
-        pure
-        returns (bytes memory params)
-    {
+    function _lzAdapterParam(uint256 _gasLimit) internal pure returns (bytes memory params) {
         params = abi.encodePacked(uint16(1), _gasLimit);
     }
 
