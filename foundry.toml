@@ -15,6 +15,16 @@ libs = ["lib"]
 runs = 100
 seed = "0x4444"
 
+[fmt]
+bracket_spacing = true
+int_types = "long"
+line_length = 120
+multiline_func_header = "all"
+number_underscore = "thousands"
+quote_style = "double"
+tab_width = 4
+wrap_comments = true
+
 [profile.ci.fuzz]
 runs = 1000
 
