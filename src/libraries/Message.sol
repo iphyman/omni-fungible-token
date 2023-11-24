@@ -32,14 +32,7 @@ library Message {
         remoteAddress = payload.toBytes32(0);
     }
 
-    function encodeTransfer(
-        bytes32 _to,
-        uint64 _amount
-    )
-        internal
-        pure
-        returns (bytes memory payload)
-    {
+    function encodeTransfer(bytes32 _to, uint64 _amount) internal pure returns (bytes memory payload) {
         payload = abi.encodePacked(TRANSFER, _to, _amount);
     }
 
@@ -54,16 +47,10 @@ library Message {
         pure
         returns (bytes memory payload)
     {
-        payload = abi.encodePacked(
-            TRANSFER_WITH_CALLBACK, _from, _to, _amount, _gasForCallback, _payload
-        );
+        payload = abi.encodePacked(TRANSFER_WITH_CALLBACK, _from, _to, _amount, _gasForCallback, _payload);
     }
 
-    function decodeTransfer(bytes memory payload)
-        internal
-        pure
-        returns (bytes32 to, uint256 amount)
-    {
+    function decodeTransfer(bytes memory payload) internal pure returns (bytes32 to, uint64 amount) {
         uint8 action = payload.toUint8(0);
 
         if (action != TRANSFER) revert InvalidPayload();
@@ -75,13 +62,7 @@ library Message {
     function decodeTransferWithCallback(bytes memory _payload)
         internal
         pure
-        returns (
-            bytes32 from,
-            bytes32 to,
-            uint64 amount,
-            uint64 gasForCallback,
-            bytes memory payload
-        )
+        returns (bytes32 from, bytes32 to, uint64 amount, uint64 gasForCallback, bytes memory payload)
     {
         uint8 action = _payload.toUint8(0);
 

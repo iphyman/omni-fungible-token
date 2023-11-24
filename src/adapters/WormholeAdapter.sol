@@ -8,7 +8,7 @@ import { IWormholeRelayer } from "../interfaces/IWormholeRelayer.sol";
 import { IWormholeReceiver } from "../interfaces/IWormholeReceiver.sol";
 import { CommonErrorsAndEvents } from "../interfaces/CommonErrorsAndEvents.sol";
 
-import { Ownable } from "lib/openzeppelin-contracts";
+import { Ownable } from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import { BytesLib } from "../libraries/BytesLib.sol";
 
 abstract contract WormholeAdapter is
@@ -20,12 +20,12 @@ abstract contract WormholeAdapter is
     using BytesLib for bytes;
 
     struct WormholeState {
-        mapping(uint8 => uint256 gasPrice) gasLookup;
+        uint16 chainId;
+        mapping(uint8 => uint256) gasLookup;
         mapping(uint16 => bytes32) routers;
         mapping(bytes32 => bool) consumedMessages;
     }
 
-    IWormhole public wormhole;
     IWormholeRelayer public wormholeRelayer;
     WormholeState public wormholeState;
 
@@ -72,11 +72,10 @@ abstract contract WormholeAdapter is
         _wormholeReceive(_payload, _srcAddress, _srcChainId, _deliveryHash);
     }
 
-    function enableWormhole(address _whEndpoint, address _relayer) external onlyOwner {
-        if (_whEndpoint == address(0x0)) revert InvalidWormholeEndpoint();
+    function enableWormhole(uint16 _chainId, address _relayer) external onlyOwner {
         if (_relayer == address(0x0)) revert InvalidWormholeRelayer();
 
-        wormhole = IWormhole(_whEndpoint);
+        wormholeState.chainId = _chainId;
         wormholeRelayer = IWormholeRelayer(_relayer);
     }
 
@@ -91,7 +90,7 @@ abstract contract WormholeAdapter is
         internal
     {
         wormholeRelayer.sendPayloadToEvm{ value: msg.value }(
-            _dstChainId, _dstAddress, _payload, _receiveValue, _gasLimit, wormhole.chainId(), _caller
+            _dstChainId, _dstAddress, _payload, _receiveValue, _gasLimit, wormholeState.chainId, _caller
         );
     }
 

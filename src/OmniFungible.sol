@@ -7,8 +7,9 @@ import { IReceiveTransferCallback } from "./interfaces/IReceiveTransferCallback.
 
 import { AddressTypeCast } from "./libraries/AddressTypeCast.sol";
 import { Message } from "./libraries/Message.sol";
-import { Ownable } from "lib/openzeppelin-contracts";
-import { ERC20 } from "lib/openzeppelin-contracts";
+import { Ownable } from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import { ERC20 } from "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import { ExcessivelySafeCall } from "./libraries/ExcessivelySafeCall.sol";
 
 import { LayerZeroAdapter } from "./adapters/LayerZeroAdapter.sol";
 import { WormholeAdapter } from "./adapters/WormholeAdapter.sol";
@@ -17,10 +18,11 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
     using Message for bytes;
     using AddressTypeCast for bytes32;
     using AddressTypeCast for address;
+    using ExcessivelySafeCall for address;
 
     uint256 constant DEFAULT_GAS_LIMIT = 500_000;
 
-    constructor(address _owner, string memory _name, string memory _symbol) Ownable(_owner) ERC20(_name, _symbol) { }
+    constructor(string memory _name, string memory _symbol) Ownable() ERC20(_name, _symbol) { }
 
     /// @inheritdoc IOmniFungible
     function transferFrom(
@@ -59,18 +61,17 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
         return totalSupply();
     }
 
-    function _normalizeAmount(uint256 _amount) internal pure returns (uint64 amount) {
-        amount = uint64(_amount);
+    function _normalizeAmount(uint256 _amount) internal view returns (uint64) {
         uint8 _decimals = decimals();
 
         if (_decimals > 8) {
-            amount /= 10 ** (_decimals - 8);
+            _amount /= 10 ** (_decimals - 8);
         }
 
-        return amount;
+        return uint64(_amount);
     }
 
-    function _deNormalizeAmount(uint64 _amount) internal returns (uint256 amount) {
+    function _deNormalizeAmount(uint64 _amount) internal view returns (uint256 amount) {
         amount = uint256(_amount);
         uint8 _decimals = decimals();
 
@@ -106,7 +107,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
     )
         public
     {
-        if (_msgSender() != address(this)) revert NotOmniFungible();
+        if (_msgSender() != address(this)) revert NotOminiFungible();
 
         _transferFrom(address(this), to, amount);
         emit RemoteTransferReceived(srcChainId, to, amount);
@@ -119,7 +120,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
         address from,
         bytes32 to,
         uint256 value,
-        AdapterCallParams calldata params
+        AdapterCallParams memory params
     )
         internal
     {
@@ -131,7 +132,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
 
         if (from != spender) _spendAllowance(from, spender, value);
 
-        _burn(_from, value);
+        _burn(from, value);
 
         if (channel == Message.Channel.LAYERZERO) {
             bytes memory remoteRouter = lzState.routers[dstChainId];
@@ -142,7 +143,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
             address remoteRouter = AddressTypeCast.bytes32ToAddress(wormholeState.routers[dstChainId]);
             _whSend(dstChainId, remoteRouter, _msgSender(), DEFAULT_GAS_LIMIT, 0, payload);
         } else {
-            revert UnSupportedAction();
+            revert UnsupportedAction();
         }
 
         emit RemoteTransfer(dstChainId, to, from, value);
@@ -160,14 +161,15 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
         internal
     {
         uint64 normalizedAmount = _normalizeAmount(value);
-        bytes memory _payload = Message.encodeTransferWithCallback(from, to, normalizedAmount, gasForCallback, payload);
+        bytes memory _payload =
+            Message.encodeTransferWithCallback(from.addressToBytes32(), to, normalizedAmount, gasForCallback, payload);
 
         address spender = _msgSender();
         Message.Channel channel = Message.Channel(params.adapter);
 
         if (from != spender) _spendAllowance(from, spender, value);
 
-        _burn(_from, value);
+        _burn(from, value);
 
         if (channel == Message.Channel.LAYERZERO) {
             bytes memory remoteRouter = lzState.routers[dstChainId];
@@ -179,7 +181,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
             bytes32 remoteRouter = wormholeState.routers[dstChainId];
             _whSend(dstChainId, remoteRouter.bytes32ToAddress(), _msgSender(), DEFAULT_GAS_LIMIT, 0, _payload);
         } else {
-            revert UnSupportedAction();
+            revert UnsupportedAction();
         }
 
         emit RemoteTransfer(dstChainId, to, from, value);
@@ -246,7 +248,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
         } else if (action == Message.TRANSFER_WITH_CALLBACK) {
             _receiveTransferWithCallback(_srcChainId, _srcAddress, _nonce, _payload, Message.Channel.LAYERZERO);
         } else {
-            revert UnSupportedAction();
+            revert UnsupportedAction();
         }
     }
 
@@ -268,7 +270,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
             lzState.minted[_srcChainId][_srcAddress][_nonce] = true;
         }
 
-        uint256 gas = minted ? gasleft() : gasForCallback;
+        uint256 gas = minted ? gasleft() : _gasForCallback;
         (bool success, bytes memory reason) = address(this).excessivelySafeCall(
             gasleft(),
             150,
@@ -295,7 +297,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
         internal
     {
         _mint(address(this), _amount);
-        (bool success, bytes memory reason) = address(this).excessivelySafeCall(
+        (bool success,) = address(this).excessivelySafeCall(
             gasleft(),
             150,
             abi.encodeWithSelector(
@@ -310,6 +312,13 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
                 _payload
             )
         );
+
+        if (!success) {
+            // try Refund to the source
+            AdapterCallParams memory params =
+                AdapterCallParams({ refundAddress: payable(address(this)), adapter: uint8(Message.Channel.WORMHOLE) });
+            _remoteTransfer(_srcChainId, address(this), _from, _amount, params);
+        }
     }
 
     function _wormholeReceive(
@@ -326,9 +335,11 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZe
         if (action == Message.TRANSFER) {
             _receiveTransfer(_srcChainId, _payload);
         } else if (action == Message.TRANSFER_WITH_CALLBACK) {
-            _receiveTransferWithCallback(_srcChainId, _srcAddress, _nonce, _payload, Message.Channel.WORMHOLE);
+            _receiveTransferWithCallback(
+                _srcChainId, abi.encodePacked(_srcAddress), 0, _payload, Message.Channel.WORMHOLE
+            );
         } else {
-            revert UnSupportedAction();
+            revert UnsupportedAction();
         }
     }
 }

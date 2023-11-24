@@ -11,7 +11,7 @@ import { BytesLib } from "../libraries/BytesLib.sol";
 import { ExcessivelySafeCall } from "../libraries/ExcessivelySafeCall.sol";
 import { CommonErrorsAndEvents } from "../interfaces/CommonErrorsAndEvents.sol";
 
-import { Ownable } from "lib/openzeppelin-contracts";
+import { Ownable } from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
 abstract contract LayerZeroAdapter is
     Ownable,
@@ -29,6 +29,8 @@ abstract contract LayerZeroAdapter is
         mapping(uint16 => bytes) routers;
         // A map of chainId => action type => gas
         mapping(uint16 => mapping(uint8 => uint256)) gasLookup;
+        // A map of chainid => srcAddress => nonce => minted
+        mapping(uint16 => mapping(bytes => mapping(uint64 => bool))) minted;
         // A map of chainId => srcAddress => nonce => payload hash
         mapping(uint16 => mapping(bytes => mapping(uint64 => bytes32))) failedMessages;
     }
