@@ -197,7 +197,7 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
             _payload.decodeTransferWithCallback();
 
         uint256 denormalizedAmount = _deNormalizeAmount(amount);
-        address _to = AddressTypeCast.bytes32ToAddress(to);
+        address _to = to.bytes32ToAddress();
 
         if (!_isContract(_to)) {
             emit NotContractAccount(_to);
