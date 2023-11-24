@@ -11,8 +11,9 @@ import { Ownable } from "lib/openzeppelin-contracts";
 import { ERC20 } from "lib/openzeppelin-contracts";
 
 import { LayerZeroAdapter } from "./adapters/LayerZeroAdapter.sol";
+import { WormholeAdapter } from "./adapters/WormholeAdapter.sol";
 
-contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
+contract OmniFungible is IOmniFungible, Ownable, ERC20, WormholeAdapter, LayerZeroAdapter {
     using Message for bytes;
     using AddressTypeCast for bytes32;
     using AddressTypeCast for address;
@@ -137,6 +138,11 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
             bytes memory adapterParams = _lzAdapterParam(DEFAULT_GAS_LIMIT);
             //TODO: ensure remoteRouter is valid
             _lzSend(dstChainId, remoteRouter, payload, params.refundAddress, address(0), adapterParams, msg.value);
+        } else if (channel == Message.Channel.WORMHOLE) {
+            address remoteRouter = AddressTypeCast.bytes32ToAddress(wormholeState.routers[dstChainId]);
+            _whSend(dstChainId, remoteRouter, _msgSender(), DEFAULT_GAS_LIMIT, 0, payload);
+        } else {
+            revert UnSupportedAction();
         }
 
         emit RemoteTransfer(dstChainId, to, from, value);
@@ -169,6 +175,11 @@ contract OmniFungible is IOmniFungible, Ownable, ERC20, LayerZeroAdapter {
                 _lzAdapterParam(DEFAULT_GAS_LIMIT, AddressTypeCast.bytes32ToAddress(to), gasForCallback);
             /// TODO: ensure valid remoteRouter
             _lzSend(dstChainId, remoteRouter, _payload, params.refundAddress, address(0), adapterParams, msg.value);
+        } else if (channel == Message.Channel.WORMHOLE) {
+            bytes32 remoteRouter = wormholeState.routers[dstChainId];
+            _whSend(dstChainId, remoteRouter.bytes32ToAddress(), _msgSender(), DEFAULT_GAS_LIMIT, 0, _payload);
+        } else {
+            revert UnSupportedAction();
         }
 
         emit RemoteTransfer(dstChainId, to, from, value);

@@ -20,8 +20,6 @@ abstract contract WormholeAdapter is
     using BytesLib for bytes;
 
     struct WormholeState {
-        address controller;
-        uint16 controllerChainId;
         mapping(uint8 => uint256 gasPrice) gasLookup;
         mapping(uint16 => bytes32) routers;
         mapping(bytes32 => bool) consumedMessages;
